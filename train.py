@@ -17,6 +17,9 @@ from torch.utils.tensorboard import SummaryWriter
 import dataloading as dl
 import model as mdl
 
+import time
+start_time = time.time()
+
 logger_py = logging.getLogger(__name__)
 
 # Fix seeds
@@ -146,3 +149,6 @@ while True:
             checkpoint_io.save('model_%d.pt' % it, epoch_it=epoch_it, it=it,
                                loss_val_best=metric_val_best)
     scheduler.step()
+
+
+print("OVERALL RUN TIME --- %s seconds ---" % (time.time() - start_time))

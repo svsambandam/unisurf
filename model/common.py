@@ -265,6 +265,10 @@ def transform_to_camera_space(p_world, camera_mat, world_mat, scale_mat):
     # Apply matrices to transform p_world to camera space
     p_cam = camera_mat @ world_mat @ scale_mat @ p_world
 
+    # normalize 
+    p_cam = p_cam[:]/p_cam[:,3,:]
+    p_cam = p_cam[:]/p_cam[:,2,:]
+
     # Transform points back to 3D coordinates
     p_cam = p_cam[:, :3].permute(0, 2, 1)
     return p_cam

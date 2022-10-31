@@ -71,10 +71,13 @@ class Renderer(nn.Module):
         depth_range = torch.tensor(self.depth_range)
         n_max_network_queries = self.n_max_network_queries
         
+        # print('sne-WARNING: changed input pixels to ndc not random rendering75')
+        # pixels = torch.tensor(np.expand_dims(np.load('ndc.npy'),axis=0)).to(device)
         # Prepare camera projection
         pixels_world = image_points_to_world(
             pixels, camera_mat, world_mat,scale_mat
         )
+        n_points = pixels_world.shape[1]
         camera_world = origin_to_world(
             n_points, camera_mat, world_mat, scale_mat
         )
@@ -116,6 +119,7 @@ class Renderer(nn.Module):
        
         points = camera_world + ray_vector * dists.unsqueeze(-1)
         points = points.view(-1,3)
+        # np.save('points.npy', points.cpu(), allow_pickle=True)
 
         # Define interval
         depth_intersect[:,:,0] = torch.Tensor([0.0]).cuda() 

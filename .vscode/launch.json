@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            /////////////////////////////////////////////////////////
+            // GT SCAN24
+            // "program": "train.py",
+            // "args": ["configs/DTU/scan0024.yaml"],
+            // MY SCAN24
+            // "program": "train.py",
+            // "args": ["configs/DIY/scan24.yaml"],
+            /////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////////////
+            // GT SCAN55
+            // "program": "train.py",
+            // "args": ["configs/DTU/scan0055.yaml"],
+            // MY SCAN55
+            "program": "train.py",
+            "args": ["configs/DIY/scan55.yaml"],
+            /////////////////////////////////////////////////////////
+            "console": "integratedTerminal",
+            "python": "/scratch/soft/anaconda3/envs/unisurf/bin/python",
+            "justMyCode": true
+        }
+    ]
+}

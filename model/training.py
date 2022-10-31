@@ -179,7 +179,7 @@ class Trainer(object):
         '''
         n_points = self.n_eval_points if eval_mode else self.n_training_points
         (img, mask_img, world_mat, camera_mat, scale_mat, img_idx) = self.process_data_dict(data)
-
+        print('TRAIN ID: ', img_idx)
         # Shortcuts
         device = self.device
         batch_size, _, h, w = img.shape

@@ -21,7 +21,11 @@ mcubes_module = Extension(
     ],
     language='c++',
     extra_compile_args=['-std=c++11'],
-    include_dirs=[numpy_include_dir]
+    # include_dirs=[
+    #     # numpy_include_dir
+    #     # "/scratch/soft/anaconda3/envs/unisurf/lib/python3.10/site-packages/numpy/core/include"
+    #     "numpy/"
+    #     ]
 )
 
 # mise (efficient mesh extraction)
