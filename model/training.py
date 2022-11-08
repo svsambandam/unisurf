@@ -104,7 +104,7 @@ class Trainer(object):
 
             rgb_pred = \
                 [self.model(
-                    pixels_i, camera_mat, world_mat, scale_mat, 'unisurf', 
+                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, 'unisurf', 
                     add_noise=False, eval_=True, it=it)['rgb']
                     for ii, pixels_i in enumerate(torch.split(pixels, 1024, dim=1))]
            
@@ -128,7 +128,7 @@ class Trainer(object):
 
             rgb_pred = \
                 [self.model(
-                    pixels_i, camera_mat, world_mat, scale_mat, 'phong_renderer', 
+                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, 'phong_renderer', 
                     add_noise=False, eval_=True, it=it)['rgb']
                     for ii, pixels_i in enumerate(torch.split(pixels, 1024, dim=1))]
            
@@ -160,7 +160,7 @@ class Trainer(object):
         # Get "ordinary" data
        
         img = data.get('img').to(device)
-        img_idx = data.get('img.idx')
+        img_idx = data.get('img.idx').to(device)
         batch_size, _, h, w = img.shape
         mask_img = data.get('img.mask', torch.ones(batch_size, h, w)).unsqueeze(1).to(device)
         world_mat = data.get('img.world_mat').to(device)
@@ -179,7 +179,7 @@ class Trainer(object):
         '''
         n_points = self.n_eval_points if eval_mode else self.n_training_points
         (img, mask_img, world_mat, camera_mat, scale_mat, img_idx) = self.process_data_dict(data)
-        print('TRAIN ID: ', img_idx)
+        # print('TRAIN ID: ', img_idx)
         # Shortcuts
         device = self.device
         batch_size, _, h, w = img.shape
@@ -204,7 +204,7 @@ class Trainer(object):
             mask_gt = get_tensor_values(mask_img, pix.clone()).bool().reshape(-1)
 
         out_dict = self.model(
-            p, camera_mat, world_mat, scale_mat, 
+            p, camera_mat, world_mat, scale_mat, img_idx,
             self.rendering_technique, it=it, mask=mask_gt, 
             eval_=eval_mode
         )

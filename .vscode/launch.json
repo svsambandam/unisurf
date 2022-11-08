@@ -8,25 +8,35 @@
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            /////////////////////////////////////////////////////////
-            // GT SCAN24
-            // "program": "train.py",
-            // "args": ["configs/DTU/scan0024.yaml"],
-            // MY SCAN24
-            // "program": "train.py",
-            // "args": ["configs/DIY/scan24.yaml"],
-            /////////////////////////////////////////////////////////
-            /////////////////////////////////////////////////////////
-            // GT SCAN55
-            // "program": "train.py",
-            // "args": ["configs/DTU/scan0055.yaml"],
-            // MY SCAN55
             "program": "train.py",
-            "args": ["configs/DIY/scan55.yaml"],
-            /////////////////////////////////////////////////////////
+            "args": ["configs/DIY/curls.yaml"],
             "console": "integratedTerminal",
-            "python": "/scratch/soft/anaconda3/envs/unisurf/bin/python",
-            "justMyCode": true
-        }
+            "justMyCode": true,
+            "python": "/scratch/soft/anaconda3/envs/unisurf/bin/python"
+        },
+        // {
+        //     "name": "Python: Current File",
+        //     "type": "python",
+        //     "request": "launch",
+        //     /////////////////////////////////////////////////////////
+        //     // GT SCAN24
+        //     // "program": "train.py",
+        //     // "args": ["configs/DTU/scan0024.yaml"],
+        //     // MY SCAN24
+        //     "program": "train.py",
+        //     "args": ["configs/DIY/scan24.yaml"],
+        //     /////////////////////////////////////////////////////////
+        //     /////////////////////////////////////////////////////////
+        //     // GT SCAN55
+        //     // "program": "train.py",
+        //     // "args": ["configs/DTU/scan0055.yaml"],
+        //     // MY SCAN55
+        //     // "program": "train.py",
+        //     // "args": ["configs/DIY/scan55.yaml", "--warp", "0"],
+        //     /////////////////////////////////////////////////////////
+        //     "console": "integratedTerminal",
+        //     "python": "/scratch/soft/anaconda3/envs/unisurf/bin/python",
+        //     "justMyCode": true
+        // }
     ]
 }

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class NeuralNetwork(nn.Module):
-    ''' Network class containing occupanvy and appearance field
+    ''' Network class containing occupancy and appearance field
     
     Args:
         cfg (dict): network configs
@@ -19,21 +19,41 @@ class NeuralNetwork(nn.Module):
         hidden_size = cfg['hidden_dim']
         self.octaves_pe = cfg['octaves_pe']
         self.octaves_pe_views = cfg['octaves_pe_views']
+        self.octaves_pe_warp = cfg['octaves_pe_warp']
+        dim_warp = 1
         self.skips = cfg['skips']
         self.rescale = cfg['rescale']
         self.feat_size = cfg['feat_size']
         geometric_init = cfg['geometric_init'] 
+        self.warp = cfg['warp'] 
+        self.num_layers_warp = 5
 
         bias = 0.6
 
-        # init pe
+        # init positional encoding
+        dim_warp  = self.octaves_pe*2 + dim + dim_warp
         dim_embed = dim*self.octaves_pe*2 + dim
         dim_embed_view = dim + dim*self.octaves_pe_views*2 + dim + dim + self.feat_size 
         self.transform_points = PositionalEncoding(L=self.octaves_pe)
         self.transform_points_view = PositionalEncoding(L=self.octaves_pe_views)
+        self.transform_points_warp = PositionalEncoding(L=self.octaves_pe_warp)
+        
+        ## warp network
+        print('self.warp', self.warp)
+        if self.warp:
+            dims_warp = [dim_warp] + [ hidden_size for i in range(0, 4)] + [dim]
+            self.num_layers_warp = len(dims_warp)
 
+            for l in range(0, self.num_layers_warp - 1):
+                out_dim = dims_warp[l + 1]
+                linw = nn.Linear(dims_warp[l], out_dim)
+                linw = nn.utils.weight_norm(linw)
+                setattr(self, "linw" + str(l), linw)
+            torch.nn.init.uniform_(linw.bias, -1e-4, 1e-4)
+            torch.nn.init.uniform_(linw.weight, -1e-4, 1e-4)
+        
         ### geo network
-        dims_geo = [dim_embed]+ [ hidden_size if i in self.skips else hidden_size for i in range(0, self.num_layers)] + [self.feat_size+1] 
+        dims_geo = [dim_embed] + [ hidden_size if i in self.skips else hidden_size for i in range(0, self.num_layers)] + [self.feat_size+1] 
         self.num_layers = len(dims_geo)
         for l in range(0, self.num_layers - 1):
             if l + 1 in self.skips:
@@ -67,7 +87,7 @@ class NeuralNetwork(nn.Module):
         self.softplus = nn.Softplus(beta=100)
 
         ## appearance network
-        dims_view = [dim_embed_view]+ [ hidden_size for i in range(0, 4)] + [3]
+        dims_view = [dim_embed_view] + [ hidden_size for i in range(0, 4)] + [3]
 
         self.num_layers_app = len(dims_view)
 
@@ -76,6 +96,10 @@ class NeuralNetwork(nn.Module):
             lina = nn.Linear(dims_view[l], out_dim)
             lina = nn.utils.weight_norm(lina)
             setattr(self, "lina" + str(l), lina)
+
+        self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
+        self.sigmoid = nn.Sigmoid()
 
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
@@ -103,6 +127,22 @@ class NeuralNetwork(nn.Module):
                 x = self.relu(x)
         x = self.tanh(x) * 0.5 + 0.5
         return x
+    
+    def infer_warp(self, p, img_idx):
+        # raise NotImplementedError()
+        pe = self.transform_points_warp(img_idx)
+        shape = torch.tensor(p.shape)
+        shape[-1] = 1
+        pe = torch.tile(pe,tuple(shape))
+        x = torch.cat([p, pe], dim=-1)
+        for l in range(0, self.num_layers_warp - 1):
+            linw = getattr(self, "linw" + str(l))
+            x = linw(x)
+            if l < self.num_layers_warp - 2:
+                x = self.relu(x)
+        if x.isnan().any().item():
+            ValueError('warp contains NaN values!!!')
+        return p + x
 
     def gradient(self, p):
         with torch.enable_grad():
@@ -118,7 +158,10 @@ class NeuralNetwork(nn.Module):
                 only_inputs=True, allow_unused=True)[0]
             return gradients.unsqueeze(1)
 
-    def forward(self, p, ray_d=None, only_occupancy=False, return_logits=False,return_addocc=False, noise=False, **kwargs):
+    def forward(self, p, ray_d=None, img_idx=None, only_occupancy=False, return_logits=False,return_addocc=False, noise=False, **kwargs):
+        if self.warp:
+            assert(img_idx is not None)
+            p = self.infer_warp(p, img_idx=img_idx)
         x = self.infer_occ(p)
         if only_occupancy:
             return self.sigmoid(x[...,:1] * -10.0)

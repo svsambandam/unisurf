@@ -1,11 +1,11 @@
 dataloading:
   batchsize: 1
   cache_fields: true
-  classes: [scan24]
+  classes: [toby]
   dataset_name: DTU
   ignore_image_idx: []
   img_size: null
-  n_views: 46
+  n_views: 101
   n_workers: 8
   path: data/DIY/
 model:
@@ -43,12 +43,12 @@ training:
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
-  out_dir: ./out/DIY/scan24/
+  out_dir: ./out/DIY/toby/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [300, 400]
+  vis_resolution: [960, 536]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

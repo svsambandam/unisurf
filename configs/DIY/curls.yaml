@@ -9,12 +9,14 @@ dataloading:
   n_workers: 8
   path: data/DIY/
 model:
+  warp: 1
   feat_size: 256
   geometric_init: true
   hidden_dim: 256
   num_layers: 8
   octaves_pe: 6
   octaves_pe_views: 4
+  octaves_pe_warp: 6
   rescale: 1.0
   sig_factor: 10.0
   skips:
@@ -46,7 +48,7 @@ training:
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [200, 150]
+  vis_resolution: [800, 600]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

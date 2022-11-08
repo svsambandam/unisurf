@@ -33,30 +33,30 @@ class Renderer(nn.Module):
             self.model_bg = None
 
 
-    def forward(self, pixels, camera_mat, world_mat, scale_mat, 
+    def forward(self, pixels, camera_mat, world_mat, scale_mat, img_idx, 
                       rendering_technique, add_noise=True, eval_=False,
                       mask=None, it=0):
         if rendering_technique == 'unisurf':
             out_dict = self.unisurf(
-                pixels, camera_mat, world_mat, 
-                scale_mat, it=it, add_noise=add_noise, eval_=eval_
+                pixels, camera_mat, world_mat, scale_mat, 
+                img_idx, it=it, add_noise=add_noise, eval_=eval_
             )
         elif rendering_technique == 'phong_renderer':
             out_dict = self.phong_renderer(
-                pixels, camera_mat, world_mat, scale_mat
+                pixels, camera_mat, world_mat, scale_mat, img_idx
             )
         elif rendering_technique == 'onsurf_renderer':
             out_dict = self.onsurf_renderer(
                 pixels, camera_mat, world_mat, 
-                scale_mat, it=it, add_noise=add_noise, 
+                scale_mat, img_idx, it=it, add_noise=add_noise, 
                 mask_gt=mask, eval_=eval_
             )
         else:
             print("Choose unisurf, phong_renderer or onsurf_renderer")
         return out_dict
         
-    def unisurf(self, pixels, camera_mat, world_mat, 
-                scale_mat, add_noise=False, it=100000, eval_=False):
+    def unisurf(self, pixels, camera_mat, world_mat, scale_mat,
+                idx, add_noise=False, it=100000, eval_=False):
         # Get configs
         batch_size, n_points, _ = pixels.shape
         device = self._device
@@ -74,6 +74,7 @@ class Renderer(nn.Module):
         # print('sne-WARNING: changed input pixels to ndc not random rendering75')
         # pixels = torch.tensor(np.expand_dims(np.load('ndc.npy'),axis=0)).to(device)
         # Prepare camera projection
+        
         pixels_world = image_points_to_world(
             pixels, camera_mat, world_mat,scale_mat
         )
@@ -92,7 +93,7 @@ class Renderer(nn.Module):
         # Find surface
         with torch.no_grad():
             d_i = self.ray_marching(
-                camera_world, ray_vector, self.model,
+                camera_world, ray_vector, idx, self.model,
                 n_secant_steps=8, 
                 n_steps=[int(ray_steps),int(ray_steps)+1], 
                 rad=rad
@@ -196,7 +197,7 @@ class Renderer(nn.Module):
             rgb_i, logits_alpha_i = self.model(
                 p_fg[i:i+n_max_network_queries], 
                 ray_vector_fg[i:i+n_max_network_queries], 
-                return_addocc=True, noise=noise
+                return_addocc=True, noise=noise, img_idx=idx
             )
             rgb_fg.append(rgb_i)
             logits_alpha_fg.append(logits_alpha_i)
@@ -236,7 +237,7 @@ class Renderer(nn.Module):
         return out_dict
 
     def phong_renderer(self, pixels, camera_mat, world_mat, 
-                     scale_mat):
+                     scale_mat, img_idx):
         batch_size, num_pixels, _ = pixels.shape
         device = self._device
         rad = self.cfg['radius']
@@ -258,7 +259,7 @@ class Renderer(nn.Module):
         # run ray tracer / depth function --> 3D point on surface (differentiable)
         self.model.eval()
         with torch.no_grad():
-            d_i = self.ray_marching(camera_world, ray_vector, self.model,
+            d_i = self.ray_marching(camera_world, ray_vector, img_idx, self.model,
                                          n_secant_steps=8,  n_steps=[int(512),int(512)+1], rad=rad)
         # Get mask for where first evaluation point is occupied
         d_i = d_i.detach()
@@ -299,7 +300,7 @@ class Renderer(nn.Module):
 
         with torch.no_grad():
             rgb_val = torch.zeros(batch_size * n_points, 3, device=device)
-            rgb_val[network_object_mask] = self.model(surface_points, surface_view_vol)
+            rgb_val[network_object_mask] = self.model(surface_points, surface_view_vol, img_idx=img_idx)
 
         out_dict = {
             'rgb': rgb_values.reshape(batch_size, -1, 3),
@@ -365,7 +366,7 @@ class Renderer(nn.Module):
 
         return out_dict
 
-    def ray_marching(self, ray0, ray_direction, model, c=None,
+    def ray_marching(self, ray0, ray_direction, idx, model, c=None,
                              tau=0.5, n_steps=[128, 129], n_secant_steps=8,
                              depth_range=[0., 2.4], max_points=3500000, rad=1.0):
         ''' Performs ray marching to detect surface points.
@@ -412,7 +413,7 @@ class Renderer(nn.Module):
         # Evaluate all proposal points in parallel
         with torch.no_grad():
             val = torch.cat([(
-                self.model(p_split, only_occupancy=True) - tau)
+                self.model(p_split, only_occupancy=True, img_idx=idx) - tau)
                 for p_split in torch.split(
                     p_proposal.reshape(batch_size, -1, 3),
                     int(max_points / batch_size), dim=1)], dim=1).view(
@@ -466,7 +467,7 @@ class Renderer(nn.Module):
         # Apply surface depth refinement step (e.g. Secant method)
         d_pred = self.secant(
             f_low, f_high, d_low, d_high, n_secant_steps, ray0_masked,
-            ray_direction_masked, tau)
+            ray_direction_masked, tau, idx=idx)
 
         # for sanity
         d_pred_out = torch.ones(batch_size, n_pts).to(device)
@@ -476,7 +477,7 @@ class Renderer(nn.Module):
         return d_pred_out
 
     def secant(self, f_low, f_high, d_low, d_high, n_secant_steps,
-                          ray0_masked, ray_direction_masked, tau, it=0):
+                          ray0_masked, ray_direction_masked, tau, it=0, idx=None):
         ''' Runs the secant method for interval [d_low, d_high].
 
         Args:
@@ -493,7 +494,7 @@ class Renderer(nn.Module):
         for i in range(n_secant_steps):
             p_mid = ray0_masked + d_pred.unsqueeze(-1) * ray_direction_masked
             with torch.no_grad():
-                f_mid = self.model(p_mid,  batchwise=False,
+                f_mid = self.model(p_mid,  batchwise=False, img_idx=idx,
                                 only_occupancy=True, it=it)[...,0] - tau
             ind_low = f_mid < 0
             ind_low = ind_low

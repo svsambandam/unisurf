@@ -4,7 +4,7 @@ __pycache__/
 */__pycache__/
 *__pycache__/
 build
-testpoints/
+points/
 UNKNOWN.egg-info/
 utils/libmcubes/OLDnumpy_old/
 utils/libmcubes/numpy/

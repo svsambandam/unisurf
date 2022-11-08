@@ -99,12 +99,18 @@ if visualize_every > 0:
     if not os.path.exists(visualize_path):
         os.makedirs(visualize_path)
 
+# save arguments 
+f = os.path.join(cfg['training']['out_dir'], 'args.txt')
+with open(f, 'w') as file:
+    for key, value in cfg.items(): 
+        file.write('%s:%s\n' % (key, value))
 
 # Print model
 nparameters = sum(p.numel() for p in model.parameters())
 logger_py.info(model)
 logger_py.info('Total number of parameters: %d' % nparameters)
 t0b = time.time()
+ogt = time.time()
 
 
 while True:
@@ -117,8 +123,8 @@ while True:
         metric_val_best = loss
         # Print output
         if print_every > 0 and (it % print_every) == 0:
-            print('[Epoch %02d] it=%03d, loss=%.4f, time=%.4f'
-                           % (epoch_it, it, loss, time.time() - t0b))
+            print('[Epoch %02d] it=%03d, loss=%.4f, time=%.4f, totaltime=%.1f'
+                           % (epoch_it, it, loss, time.time() - t0b, time.time() - ogt), )
             logger_py.info('[Epoch %02d] it=%03d, loss=%.4f, time=%.4f'
                            % (epoch_it, it, loss, time.time() - t0b))
             t0b = time.time()
@@ -140,6 +146,7 @@ while True:
         if (checkpoint_every > 0 and (it % checkpoint_every) == 0):
             logger_py.info('Saving checkpoint')
             print('Saving checkpoint')
+            print("current run time | %s seconds " % (time.time() - start_time))
             checkpoint_io.save('model.pt', epoch_it=epoch_it, it=it,
                                loss_val_best=metric_val_best)
 
@@ -149,6 +156,3 @@ while True:
             checkpoint_io.save('model_%d.pt' % it, epoch_it=epoch_it, it=it,
                                loss_val_best=metric_val_best)
     scheduler.step()
-
-
-print("OVERALL RUN TIME --- %s seconds ---" % (time.time() - start_time))
