@@ -35,7 +35,8 @@ class Trainer(object):
         self.loss = Loss(
             cfg['lambda_l1_rgb'], 
             cfg['lambda_normals'],
-            cfg['lambda_occ_prob']
+            cfg['lambda_occ_prob'],
+            cfg['lambda_elastic']
         )
 
     def evaluate(self, val_loader):
@@ -210,5 +211,5 @@ class Trainer(object):
         )
         
         rgb_gt = get_tensor_values(img, pix.clone())
-        loss_dict = self.loss(out_dict['rgb'], rgb_gt, out_dict['normal'])
+        loss_dict = self.loss(out_dict['rgb'], rgb_gt, out_dict['normal'], out_dict['jacobian'])
         return loss_dict

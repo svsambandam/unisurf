@@ -56,7 +56,7 @@ class Renderer(nn.Module):
         return out_dict
         
     def unisurf(self, pixels, camera_mat, world_mat, scale_mat,
-                idx, add_noise=False, it=100000, eval_=False):
+                img_idx, add_noise=False, it=100000, eval_=False):
         # Get configs
         batch_size, n_points, _ = pixels.shape
         device = self._device
@@ -67,6 +67,7 @@ class Renderer(nn.Module):
         steps = self.cfg['num_points_in']
         steps_outside = self.cfg['num_points_out']
         ray_steps = self.cfg['ray_marching_steps']
+        use_elastic_loss = self.cfg['use_elastic_loss']
 
         depth_range = torch.tensor(self.depth_range)
         n_max_network_queries = self.n_max_network_queries
@@ -93,7 +94,7 @@ class Renderer(nn.Module):
         # Find surface
         with torch.no_grad():
             d_i = self.ray_marching(
-                camera_world, ray_vector, idx, self.model,
+                camera_world, ray_vector, img_idx, self.model,
                 n_secant_steps=8, 
                 n_steps=[int(ray_steps),int(ray_steps)+1], 
                 rad=rad
@@ -197,7 +198,7 @@ class Renderer(nn.Module):
             rgb_i, logits_alpha_i = self.model(
                 p_fg[i:i+n_max_network_queries], 
                 ray_vector_fg[i:i+n_max_network_queries], 
-                return_addocc=True, noise=noise, img_idx=idx
+                return_addocc=True, noise=noise, img_idx=img_idx
             )
             rgb_fg.append(rgb_i)
             logits_alpha_fg.append(logits_alpha_i)
@@ -221,9 +222,14 @@ class Renderer(nn.Module):
             g = self.model.gradient(pp) 
             normals_ = g[:, 0, :] / (g[:, 0, :].norm(2, dim=1).unsqueeze(-1) + 10**(-5))
             diff_norm =  torch.norm(normals_[:N] - normals_[N:], dim=-1)
+            if use_elastic_loss > 0 and len(pp) > 0:
+                jac = self.model.jacobian(pp, img_idx)
+            else:
+                jac = None
         else:
             surface_mask = network_object_mask
             diff_norm = None
+            jac = None
 
         if self.white_background:
             acc_map = torch.sum(weights, -1)
@@ -233,6 +239,7 @@ class Renderer(nn.Module):
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'mask_pred': network_object_mask,
             'normal': diff_norm,
+            'jacobian': jac
         }
         return out_dict
 
@@ -305,6 +312,7 @@ class Renderer(nn.Module):
         out_dict = {
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'normal': None,
+            'jacobian': None,
             'rgb_surf': rgb_val.reshape(batch_size, -1, 3),
         }
 
@@ -362,6 +370,7 @@ class Renderer(nn.Module):
             'rgb': rgb_val.reshape(batch_size, -1, 3),
             'normal': None,
             'rgb_surf': None,
+            'jacobian': None
         }
 
         return out_dict

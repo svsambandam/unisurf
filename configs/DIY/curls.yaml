@@ -34,12 +34,14 @@ rendering:
   sig_factor: 10.0
   type: unisurf
   white_background: false
+  use_elastic_loss: true
 training:
   backup_every: 10000
   batch_size: 1
   checkpoint_every: 5000
   lambda_l1_rgb: 1.0
   lambda_normals: 0.005
+  lambda_elastic: 0.0
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024

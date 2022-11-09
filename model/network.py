@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.autograd.functional as AF
 
 
 class NeuralNetwork(nn.Module):
@@ -39,7 +40,6 @@ class NeuralNetwork(nn.Module):
         self.transform_points_warp = PositionalEncoding(L=self.octaves_pe_warp)
         
         ## warp network
-        print('self.warp', self.warp)
         if self.warp:
             dims_warp = [dim_warp] + [ hidden_size for i in range(0, 4)] + [dim]
             self.num_layers_warp = len(dims_warp)
@@ -157,6 +157,15 @@ class NeuralNetwork(nn.Module):
                 retain_graph=True,
                 only_inputs=True, allow_unused=True)[0]
             return gradients.unsqueeze(1)
+
+    def jacobian(self, p, img_idx):
+        with torch.enable_grad():
+            p.requires_grad_(True)
+            img_idx = img_idx.to(torch.float32)
+            img_idx.requires_grad_(True)
+            inputs = (p, img_idx)           
+            # raise(NotImplementedError)
+            return AF.jacobian(self.infer_warp, inputs)
 
     def forward(self, p, ray_d=None, img_idx=None, only_occupancy=False, return_logits=False,return_addocc=False, noise=False, **kwargs):
         if self.warp:
