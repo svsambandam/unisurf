@@ -36,7 +36,8 @@ class Trainer(object):
             cfg['lambda_l1_rgb'], 
             cfg['lambda_normals'],
             cfg['lambda_occ_prob'],
-            cfg['lambda_elastic']
+            cfg['lambda_elastic'],
+            cfg['lambda_bg']
         )
 
     def evaluate(self, val_loader):

@@ -36,6 +36,7 @@ rendering:
   type: unisurf
   white_background: false
   use_elastic_loss: false
+  use_bg_loss: false
 training:
   backup_every: 10000
   batch_size: 1
@@ -44,6 +45,7 @@ training:
   lambda_normals: 0.005
   lambda_occ_prob: 0.0
   lambda_elastic: 0.0
+  lambda_bg: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
   out_dir: ./out/DIY/tail/
@@ -51,7 +53,7 @@ training:
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [960, 536]
+  vis_resolution: [480, 268]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

@@ -238,8 +238,7 @@ class Renderer(nn.Module):
         out_dict = {
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'mask_pred': network_object_mask,
-            'normal': diff_norm,
-            'jacobian': jac
+            'normal': diff_norm,            'jacobian': jac
         }
         return out_dict
 

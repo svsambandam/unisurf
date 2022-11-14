@@ -112,6 +112,12 @@ logger_py.info('Total number of parameters: %d' % nparameters)
 t0b = time.time()
 ogt = time.time()
 
+# background_points = 
+# TODO: 
+# preprocess bg points, 
+# finalize bg loss
+# se3 field
+
 
 while True:
     epoch_it += 1

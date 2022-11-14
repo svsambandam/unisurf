@@ -1,15 +1,18 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from functorch import vmap 
+import functools
 
 
 class Loss(nn.Module):
-    def __init__(self, full_weight, grad_weight, occ_prob_weight, elastic_weight):
+    def __init__(self, full_weight, grad_weight, occ_prob_weight, elastic_weight, bg_weight):
         super().__init__()
         self.full_weight = full_weight
         self.grad_weight = grad_weight
         self.occ_prob_weight = occ_prob_weight
         self.elastic_loss_weight = elastic_weight
+        self.bg_loss_weight = bg_weight
         self.l1_loss = nn.L1Loss(reduction='sum')
     
     def get_rgb_full_loss(self,rgb_values, rgb_gt):
@@ -22,7 +25,7 @@ class Loss(nn.Module):
         else:
             return diff_norm.mean()
 
-    def get_elastic_loss(jacobian, eps=1e-6, loss_type='log_svals'):
+    def get_elastic_loss(self, jacobian, eps=1e-6, loss_type='log_svals'):
         """Compute the elastic regularization loss. FROM NERFIES 
         The loss is given by sum(log(S)^2). This penalizes the singular values
         when they deviate from the identity since log(1) = 0.0,
@@ -34,10 +37,16 @@ class Loss(nn.Module):
         Returns:
             The elastic regularization loss.
         """
+        # if type(jacobian) is tuple:
+        #     print('warning: did not do jacobian elastic loss right: line 41 n 70 in losses.py')
+            # jacobian = jacobian[0]
         if loss_type == 'log_svals':
-            svals = torch.linalg.svd(jacobian, compute_uv=False)
-            log_svals = torch.log(torch.maximum(svals, eps))
+            svals = torch.linalg.svdvals(jacobian[0])
+            log_svals = torch.log(torch.maximum(svals, torch.tensor(eps)))
             sq_residual = torch.sum(log_svals**2, axis=-1)
+            # svals = torch.linalg.svdvals(jacobian[1])
+            # log_svals = torch.log(torch.maximum(svals, torch.tensor(eps)))
+            # sq_residual2 = torch.sum(log_svals**2, axis=-1)
         elif loss_type == 'svals':
             svals = torch.linalg.svd(jacobian, compute_uv=False)
             sq_residual = torch.sum((svals - 1.0)**2, axis=-1)
@@ -60,10 +69,31 @@ class Loss(nn.Module):
             raise NotImplementedError(
                 f'Unknown elastic loss type {loss_type!r}')
         residual = torch.sqrt(sq_residual)
-        loss = general_loss_with_squared_residual(sq_residual, alpha=-2.0, scale=0.03)
-        return loss, residual
+        loss = self.general_loss_with_squared_residual(sq_residual, alpha=-2.0, scale=0.03)
+        # loss2 = self.general_loss_with_squared_residual(sq_residual2, alpha=-2.0, scale=0.03)
+        return loss[0][0] #+ residual[0][0] ### SO BAD, originally loss, residual
 
-    def general_loss_with_squared_residual(squared_x, alpha, scale):
+    def get_background_loss(
+        model, state, params, key, points, noise_std, alpha=-2, scale=0.001):
+        raise(NotImplementedError)
+        """Compute the background regularization loss."""
+        metadata = random.choice(key,
+                                jnp.array(model.warp_ids, jnp.uint32),
+                                shape=(points.shape[0], 1))
+        point_noise = noise_std * random.normal(key, points.shape)
+        points = points + point_noise
+
+        warp_field = model.create_warp_field(model, num_batch_dims=1)
+        warp_out = warp_field.apply(
+            {'params': params['warp_field']},
+            points, metadata, state.warp_extra, False, False)
+        warped_points = warp_out['warped_points'][..., :3]
+        sq_residual = jnp.sum((warped_points - points)**2, axis=-1)
+        loss = utils.general_loss_with_squared_residual(
+            sq_residual, alpha=alpha, scale=scale)
+        return loss
+
+    def general_loss_with_squared_residual(self, squared_x, alpha, scale):
         r"""The general loss that takes a squared residual. FROM NERFIES
         This fuses the sqrt operation done to compute many residuals while preserving
         the square in the loss formulation.
@@ -93,6 +123,8 @@ class Loss(nn.Module):
             The losses for each element of x, in the same shape as x.
         """
         eps = torch.finfo(torch.float32).eps
+        eps = torch.tensor(eps).to('cuda')
+        alpha = torch.tensor(alpha).to('cuda')
 
         # This will be used repeatedly.
         squared_scaled_x = squared_x / (scale ** 2)
@@ -100,11 +132,11 @@ class Loss(nn.Module):
         # The loss when alpha == 2.
         loss_two = 0.5 * squared_scaled_x
         # The loss when alpha == 0.
-        loss_zero = torch.log1p(torch.minimum(0.5 * squared_scaled_x, 3e37))
+        loss_zero = torch.log1p(torch.minimum(0.5 * squared_scaled_x, torch.tensor(3e37)))
         # The loss when alpha == -infinity.
         loss_neginf = -torch.expm1(-0.5 * squared_scaled_x)
         # The loss when alpha == +infinity.
-        loss_posinf = torch.expm1(torch.minimum(0.5 * squared_scaled_x, 87.5))
+        loss_posinf = torch.expm1(torch.minimum(0.5 * squared_scaled_x, torch.tensor(87.5)))
 
         # The loss when not in one of the above special cases.
         # Clamp |2-alpha| to be >= machine epsilon so that it's safe to divide by.
@@ -140,7 +172,7 @@ class Loss(nn.Module):
     #     r = u @ m @ vh
     #     return 
 
-    def forward(self, rgb_pred, rgb_gt, diff_norm, jacobian):
+    def forward(self, rgb_pred, rgb_gt, diff_norm, jacobian_mat, bg_points=None, elastic_loss_type='log_svals'):
         rgb_gt = rgb_gt.cuda()
         
         if self.full_weight != 0.0:
@@ -153,14 +185,24 @@ class Loss(nn.Module):
         else:
             grad_loss = torch.tensor(0.0).cuda().float()
 
-        if jacobian is not None and self.elastic_loss_weight != 0.0:
-            elastic_loss = self.get_elastic_loss(jacobian)
+        if jacobian_mat is not None and self.elastic_loss_weight != 0.0:
+            # elastic_fn = functools.partial(self.get_elastic_loss,
+            #                                 loss_type=elastic_loss_type)
+            # v_elastic_fn = vmap(vmap(elastic_fn))
+            # elastic_loss = v_elastic_fn(jacobian_mat)
+            elastic_loss = self.get_elastic_loss(jacobian_mat)
         else:
             elastic_loss = torch.tensor(0.0).cuda().float()
 
+        if bg_points is not None and self.bg_loss_weight != 0.0:
+            bg_loss = self.get_background_loss(bg_points)
+        else: 
+            bg_loss = torch.tensor(0.0).cuda().float()
+
         loss = self.full_weight * rgb_full_loss + \
                self.grad_weight * grad_loss + \
-                self.elastic_loss_weight * elastic_loss
+                self.elastic_loss_weight * elastic_loss + \
+                self.bg_loss_weight * bg_loss
         if torch.isnan(loss):
             breakpoint()
 
@@ -168,7 +210,8 @@ class Loss(nn.Module):
             'loss': loss,
             'fullrgb_loss': rgb_full_loss,
             'grad_loss': grad_loss,
-            'elastic_loss': elastic_loss
+            'elastic_loss': elastic_loss,
+            'background_loss': bg_loss
         }
 
 
