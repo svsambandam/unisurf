@@ -267,6 +267,8 @@ def get_normalization(source_dir, use_linear_init=False):
         cameras_new['scale_mat_%d'  % i] = normalization
         cameras_new['world_mat_%d'  % i] = np.concatenate((Ps[i],np.array([[0,0,0,1.0]])),axis=0).astype(np.float32)
         cameras_new['camera_mat_%d' % i] = K
+    print(K)
+    print(np.linalg.inv(K), 'K and invK')
 
     np.savez('{0}/{1}.npz'.format(source_dir, cameras_filename), **cameras_new)
 

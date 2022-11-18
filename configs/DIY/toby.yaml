@@ -2,14 +2,13 @@ dataloading:
   batchsize: 1
   cache_fields: true
   classes: [toby]
-  dataset_name: DTU
+  dataset_name: DIY
   ignore_image_idx: []
   img_size: null
-  n_views: 101
+  n_views: 49
   n_workers: 8
   path: data/DIY/
 model:
-  warp: 1
   feat_size: 256
   geometric_init: true
   hidden_dim: 256
@@ -21,6 +20,7 @@ model:
   sig_factor: 10.0
   skips:
   - 4
+  warp: 1
 rendering:
   interval_decay: 1.5e-05
   interval_end: 0.1
@@ -33,11 +33,15 @@ rendering:
   ray_marching_steps: 256
   sig_factor: 10.0
   type: unisurf
+  use_bg_loss: true
+  use_elastic_loss: true
   white_background: false
 training:
   backup_every: 10000
   batch_size: 1
   checkpoint_every: 5000
+  lambda_bg: 0.1
+  lambda_elastic: 0.1
   lambda_l1_rgb: 1.0
   lambda_normals: 0.005
   lambda_occ_prob: 0.0
@@ -48,7 +52,7 @@ training:
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [960, 536]
+  vis_resolution: [800, 600]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

@@ -56,7 +56,7 @@ class Trainer(object):
         eval_dict = {k: np.mean(v) for k, v in eval_list.items()}
         return eval_dict
 
-    def train_step(self, data, it=None):
+    def train_step(self, data, bg_points, it=None):
         ''' Performs a training step.
 
         Args:
@@ -66,7 +66,7 @@ class Trainer(object):
         self.model.train()
         self.optimizer.zero_grad()
 
-        loss_dict = self.compute_loss(data, it=it)
+        loss_dict = self.compute_loss(data, bg_points, it=it)
         loss = loss_dict['loss']
         loss.backward()
         self.optimizer.step()
@@ -92,7 +92,7 @@ class Trainer(object):
 
         return eval_dict
     
-    def render_visdata(self, data, resolution, it, out_render_path):
+    def render_visdata(self, data, bg_points, resolution, it, out_render_path):
         (img, mask, world_mat, camera_mat, scale_mat, img_idx) = \
             self.process_data_dict(data)
         h, w = resolution
@@ -106,7 +106,7 @@ class Trainer(object):
 
             rgb_pred = \
                 [self.model(
-                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, 'unisurf', 
+                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, bg_points, 'unisurf', 
                     add_noise=False, eval_=True, it=it)['rgb']
                     for ii, pixels_i in enumerate(torch.split(pixels, 1024, dim=1))]
            
@@ -130,7 +130,7 @@ class Trainer(object):
 
             rgb_pred = \
                 [self.model(
-                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, 'phong_renderer', 
+                    pixels_i, camera_mat, world_mat, scale_mat, img_idx, bg_points, 'phong_renderer', 
                     add_noise=False, eval_=True, it=it)['rgb']
                     for ii, pixels_i in enumerate(torch.split(pixels, 1024, dim=1))]
            
@@ -171,7 +171,7 @@ class Trainer(object):
 
         return (img, mask_img, world_mat, camera_mat, scale_mat, img_idx)
 
-    def compute_loss(self, data, eval_mode=False, it=None):
+    def compute_loss(self, data, bg_points=None, eval_mode=False, it=None):
         ''' Compute the loss.
 
         Args:
@@ -206,11 +206,12 @@ class Trainer(object):
             mask_gt = get_tensor_values(mask_img, pix.clone()).bool().reshape(-1)
 
         out_dict = self.model(
-            p, camera_mat, world_mat, scale_mat, img_idx,
+            p, camera_mat, world_mat, scale_mat, img_idx, bg_points,
             self.rendering_technique, it=it, mask=mask_gt, 
             eval_=eval_mode
         )
         
         rgb_gt = get_tensor_values(img, pix.clone())
-        loss_dict = self.loss(out_dict['rgb'], rgb_gt, out_dict['normal'], out_dict['jacobian'])
+        loss_dict = self.loss(out_dict['rgb'], rgb_gt, out_dict['normal'], out_dict['jacobian'], 
+                    out_dict['bg_points'], out_dict['warped_bg_points'])
         return loss_dict

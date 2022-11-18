@@ -33,22 +33,22 @@ class Renderer(nn.Module):
             self.model_bg = None
 
 
-    def forward(self, pixels, camera_mat, world_mat, scale_mat, img_idx, 
+    def forward(self, pixels, camera_mat, world_mat, scale_mat, img_idx, bg_points,
                       rendering_technique, add_noise=True, eval_=False,
                       mask=None, it=0):
         if rendering_technique == 'unisurf':
             out_dict = self.unisurf(
                 pixels, camera_mat, world_mat, scale_mat, 
-                img_idx, it=it, add_noise=add_noise, eval_=eval_
+                img_idx, bg_points, it=it, add_noise=add_noise, eval_=eval_
             )
         elif rendering_technique == 'phong_renderer':
             out_dict = self.phong_renderer(
-                pixels, camera_mat, world_mat, scale_mat, img_idx
+                pixels, camera_mat, world_mat, scale_mat, img_idx, bg_points
             )
         elif rendering_technique == 'onsurf_renderer':
             out_dict = self.onsurf_renderer(
-                pixels, camera_mat, world_mat, 
-                scale_mat, img_idx, it=it, add_noise=add_noise, 
+                pixels, camera_mat, world_mat, scale_mat, 
+                img_idx, bg_points, it=it, add_noise=add_noise, 
                 mask_gt=mask, eval_=eval_
             )
         else:
@@ -56,7 +56,7 @@ class Renderer(nn.Module):
         return out_dict
         
     def unisurf(self, pixels, camera_mat, world_mat, scale_mat,
-                img_idx, add_noise=False, it=100000, eval_=False):
+                img_idx, bg_points=None, add_noise=False, it=100000, eval_=False):
         # Get configs
         batch_size, n_points, _ = pixels.shape
         device = self._device
@@ -68,6 +68,7 @@ class Renderer(nn.Module):
         steps_outside = self.cfg['num_points_out']
         ray_steps = self.cfg['ray_marching_steps']
         use_elastic_loss = self.cfg['use_elastic_loss']
+        use_bg_loss = self.cfg['use_bg_loss']
 
         depth_range = torch.tensor(self.depth_range)
         n_max_network_queries = self.n_max_network_queries
@@ -226,10 +227,20 @@ class Renderer(nn.Module):
                 jac = self.model.jacobian(pp, img_idx)
             else:
                 jac = None
+            if use_bg_loss > 0 and bg_points is not None:
+                p = torch.concatenate([torch.tensor(bg_points.T), torch.ones((1, bg_points.shape[0])).to('cuda')], axis=0).float()
+                scaled_bg_points = torch.inverse(camera_mat@world_mat@scale_mat)@camera_mat@p
+                scaled_bg_points = scaled_bg_points[0][:3,:].T
+                warped_bg_points = self.model.warp_bg_points(scaled_bg_points, img_idx=img_idx)
+            else:
+                scaled_bg_points = None
+                warped_bg_points = None
         else:
             surface_mask = network_object_mask
             diff_norm = None
             jac = None
+            scaled_bg_points = None
+            warped_bg_points = None
 
         if self.white_background:
             acc_map = torch.sum(weights, -1)
@@ -238,12 +249,15 @@ class Renderer(nn.Module):
         out_dict = {
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'mask_pred': network_object_mask,
-            'normal': diff_norm,            'jacobian': jac
+            'normal': diff_norm,            
+            'jacobian': jac,
+            'bg_points': scaled_bg_points,
+            'warped_bg_points': warped_bg_points
         }
         return out_dict
 
     def phong_renderer(self, pixels, camera_mat, world_mat, 
-                     scale_mat, img_idx):
+                     scale_mat, img_idx, bg_points):
         batch_size, num_pixels, _ = pixels.shape
         device = self._device
         rad = self.cfg['radius']
@@ -312,6 +326,8 @@ class Renderer(nn.Module):
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'normal': None,
             'jacobian': None,
+            'warped_bg_points': None,
+            'bg_points': None,
             'rgb_surf': rgb_val.reshape(batch_size, -1, 3),
         }
 
@@ -369,7 +385,9 @@ class Renderer(nn.Module):
             'rgb': rgb_val.reshape(batch_size, -1, 3),
             'normal': None,
             'rgb_surf': None,
-            'jacobian': None
+            'jacobian': None,
+            'bg_points': None,
+            'warped_bg_points': None
         }
 
         return out_dict

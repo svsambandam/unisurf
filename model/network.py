@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd.functional as AF
-
+from functorch import jacfwd, vmap
 
 class NeuralNetwork(nn.Module):
     ''' Network class containing occupancy and appearance field
@@ -27,6 +27,7 @@ class NeuralNetwork(nn.Module):
         self.feat_size = cfg['feat_size']
         geometric_init = cfg['geometric_init'] 
         self.warp = cfg['warp'] 
+        self.img_idxs = cfg['img_idxs']
         self.num_layers_warp = 5
 
         bias = 0.6
@@ -129,19 +130,13 @@ class NeuralNetwork(nn.Module):
         return x
     
     def infer_warp(self, p, img_idx):
-        # raise NotImplementedError()
         pe = self.transform_points_warp(img_idx)
-        shape = torch.tensor(p.shape)
-        shape[-1] = 1
-        pe = torch.tile(pe,tuple(shape))
         x = torch.cat([p, pe], dim=-1)
         for l in range(0, self.num_layers_warp - 1):
             linw = getattr(self, "linw" + str(l))
             x = linw(x)
             if l < self.num_layers_warp - 2:
                 x = self.relu(x)
-        if x.isnan().any().item():
-            ValueError('warp contains NaN values!!!')
         return p + x
 
     def gradient(self, p):
@@ -162,15 +157,29 @@ class NeuralNetwork(nn.Module):
         with torch.enable_grad():
             p.requires_grad_(True)
             img_idx = img_idx.to(torch.float32)
-            img_idx.requires_grad_(True)
-            inputs = (p, img_idx)           
-            # raise(NotImplementedError)
-            return AF.jacobian(self.infer_warp, inputs)
+            if len(img_idx) == 1:
+                img_idx = torch.ones_like(torch.unsqueeze(p[...,0],dim=-1))*img_idx
+            img_idx.requires_grad_(True)     
+            return vmap(jacfwd(self.infer_warp))(p,img_idx) 
+
+    def warp_bg_points(self, points, noise_std=0.001, img_idx=None):
+        if img_idx is not None:
+            idx = torch.ones_like(torch.unsqueeze(points[...,0],dim=-1))*img_idx
+        else:
+            idx = torch.randint(len(self.img_idxs), size=(points.shape[0], 1))
+            idx = self.img_idxs[idx]
+        point_noise = torch.normal(torch.zeros(points.shape),noise_std)
+        points = points + point_noise.to(points.device)
+        return self.infer_warp(points.type(torch.float32), idx.type(torch.float32))
 
     def forward(self, p, ray_d=None, img_idx=None, only_occupancy=False, return_logits=False,return_addocc=False, noise=False, **kwargs):
         if self.warp:
             assert(img_idx is not None)
+            if len(img_idx) == 1:
+                img_idx = torch.ones_like(torch.unsqueeze(p[...,0],dim=-1))*img_idx
             p = self.infer_warp(p, img_idx=img_idx)
+            if p.isnan().sum():
+                ValueError('warp contains NaN values!!!')
         x = self.infer_occ(p)
         if only_occupancy:
             return self.sigmoid(x[...,:1] * -10.0)

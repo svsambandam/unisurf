@@ -41,7 +41,7 @@ class Loss(nn.Module):
         #     print('warning: did not do jacobian elastic loss right: line 41 n 70 in losses.py')
             # jacobian = jacobian[0]
         if loss_type == 'log_svals':
-            svals = torch.linalg.svdvals(jacobian[0])
+            svals = torch.linalg.svdvals(jacobian)
             log_svals = torch.log(torch.maximum(svals, torch.tensor(eps)))
             sq_residual = torch.sum(log_svals**2, axis=-1)
             # svals = torch.linalg.svdvals(jacobian[1])
@@ -70,26 +70,14 @@ class Loss(nn.Module):
                 f'Unknown elastic loss type {loss_type!r}')
         residual = torch.sqrt(sq_residual)
         loss = self.general_loss_with_squared_residual(sq_residual, alpha=-2.0, scale=0.03)
-        # loss2 = self.general_loss_with_squared_residual(sq_residual2, alpha=-2.0, scale=0.03)
-        return loss[0][0] #+ residual[0][0] ### SO BAD, originally loss, residual
+        return torch.mean(loss) #+ residual[0][0] ### SO BAD, originally loss, residual
 
     def get_background_loss(
-        model, state, params, key, points, noise_std, alpha=-2, scale=0.001):
-        raise(NotImplementedError)
+        self, warped_points, points, alpha=-2, scale=0.001):
+        # raise(NotImplementedError)
         """Compute the background regularization loss."""
-        metadata = random.choice(key,
-                                jnp.array(model.warp_ids, jnp.uint32),
-                                shape=(points.shape[0], 1))
-        point_noise = noise_std * random.normal(key, points.shape)
-        points = points + point_noise
-
-        warp_field = model.create_warp_field(model, num_batch_dims=1)
-        warp_out = warp_field.apply(
-            {'params': params['warp_field']},
-            points, metadata, state.warp_extra, False, False)
-        warped_points = warp_out['warped_points'][..., :3]
-        sq_residual = jnp.sum((warped_points - points)**2, axis=-1)
-        loss = utils.general_loss_with_squared_residual(
+        sq_residual = torch.sum((warped_points - points)**2, axis=-1)
+        loss = self.general_loss_with_squared_residual(
             sq_residual, alpha=alpha, scale=scale)
         return loss
 
@@ -172,7 +160,7 @@ class Loss(nn.Module):
     #     r = u @ m @ vh
     #     return 
 
-    def forward(self, rgb_pred, rgb_gt, diff_norm, jacobian_mat, bg_points=None, elastic_loss_type='log_svals'):
+    def forward(self, rgb_pred, rgb_gt, diff_norm, jacobian_mat, bg_points=None, bg_points_warped=None, elastic_loss_type='log_svals'):
         rgb_gt = rgb_gt.cuda()
         
         if self.full_weight != 0.0:
@@ -186,16 +174,12 @@ class Loss(nn.Module):
             grad_loss = torch.tensor(0.0).cuda().float()
 
         if jacobian_mat is not None and self.elastic_loss_weight != 0.0:
-            # elastic_fn = functools.partial(self.get_elastic_loss,
-            #                                 loss_type=elastic_loss_type)
-            # v_elastic_fn = vmap(vmap(elastic_fn))
-            # elastic_loss = v_elastic_fn(jacobian_mat)
             elastic_loss = self.get_elastic_loss(jacobian_mat)
         else:
             elastic_loss = torch.tensor(0.0).cuda().float()
 
-        if bg_points is not None and self.bg_loss_weight != 0.0:
-            bg_loss = self.get_background_loss(bg_points)
+        if bg_points is not None and bg_points_warped is not None and self.bg_loss_weight != 0.0:
+            bg_loss = self.get_background_loss(bg_points, bg_points_warped).mean()
         else: 
             bg_loss = torch.tensor(0.0).cuda().float()
 

@@ -55,6 +55,15 @@ test_loader = dl.get_dataloader(cfg, mode='test')
 iter_test = iter(test_loader)
 data_test = next(iter_test)
 
+# if using background loss, add points and training image indexes
+img_idxs = torch.arange(len(train_loader))
+img_idxs = img_idxs[img_idxs!=data_test['img.idx']]
+bg_points = None
+if cfg['rendering']['use_bg_loss']:
+    points_file = os.path.join(cfg['dataloading']['path'], cfg['dataloading']['classes'][0],'scan/points.npy' )
+    bg_points = torch.tensor(np.load('./'+points_file), device=device)
+cfg['model']['img_idxs'] = img_idxs.to(device)
+    
 # init network
 model_cfg = cfg['model']
 model = mdl.NeuralNetwork(model_cfg)
@@ -112,7 +121,6 @@ logger_py.info('Total number of parameters: %d' % nparameters)
 t0b = time.time()
 ogt = time.time()
 
-# background_points = 
 # TODO: 
 # preprocess bg points, 
 # finalize bg loss
@@ -124,7 +132,7 @@ while True:
 
     for batch in train_loader:
         it += 1
-        loss_dict = trainer.train_step(batch, it)
+        loss_dict = trainer.train_step(batch, bg_points, it=it)
         loss = loss_dict['loss']
         metric_val_best = loss
         # Print output
@@ -143,7 +151,7 @@ while True:
             if not os.path.exists(out_render_path):
                 os.makedirs(out_render_path)
             val_rgb = trainer.render_visdata(
-                        data_test, 
+                        data_test, bg_points, 
                         cfg['training']['vis_resolution'], 
                         it, out_render_path)
             #logger.add_image('rgb', val_rgb, it)
