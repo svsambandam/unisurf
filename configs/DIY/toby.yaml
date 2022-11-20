@@ -20,7 +20,7 @@ model:
   sig_factor: 10.0
   skips:
   - 4
-  warp: 1
+  warp: 'translation'
 rendering:
   interval_decay: 1.5e-05
   interval_end: 0.1

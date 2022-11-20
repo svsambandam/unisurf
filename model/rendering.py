@@ -228,18 +228,16 @@ class Renderer(nn.Module):
             else:
                 jac = None
             if use_bg_loss > 0 and bg_points is not None:
-                p = torch.concatenate([torch.tensor(bg_points.T), torch.ones((1, bg_points.shape[0])).to('cuda')], axis=0).float()
-                scaled_bg_points = torch.inverse(camera_mat@world_mat@scale_mat)@camera_mat@p
-                scaled_bg_points = scaled_bg_points[0][:3,:].T
-                warped_bg_points = self.model.warp_bg_points(scaled_bg_points, img_idx=img_idx)
+                # p = torch.concatenate([torch.tensor(bg_points.T), torch.ones((1, bg_points.shape[0])).to('cuda')], axis=0).float()
+                # scaled_bg_points = torch.inverse(camera_mat@world_mat@scale_mat)@camera_mat@p
+                # scaled_bg_points = scaled_bg_points[0][:3,:].T
+                warped_bg_points = self.model.warp_bg_points(bg_points, img_idx=img_idx)
             else:
-                scaled_bg_points = None
                 warped_bg_points = None
         else:
             surface_mask = network_object_mask
             diff_norm = None
             jac = None
-            scaled_bg_points = None
             warped_bg_points = None
 
         if self.white_background:
@@ -251,7 +249,7 @@ class Renderer(nn.Module):
             'mask_pred': network_object_mask,
             'normal': diff_norm,            
             'jacobian': jac,
-            'bg_points': scaled_bg_points,
+            'bg_points': bg_points,
             'warped_bg_points': warped_bg_points
         }
         return out_dict
@@ -326,8 +324,8 @@ class Renderer(nn.Module):
             'rgb': rgb_values.reshape(batch_size, -1, 3),
             'normal': None,
             'jacobian': None,
-            'warped_bg_points': None,
             'bg_points': None,
+            'warped_bg_points': None,
             'rgb_surf': rgb_val.reshape(batch_size, -1, 3),
         }
 

@@ -9,7 +9,7 @@ dataloading:
   n_workers: 8
   path: data/DIY/
 model:
-  warp: 1
+  warp: 'translationd'
   feat_size: 256
   geometric_init: true
   hidden_dim: 256

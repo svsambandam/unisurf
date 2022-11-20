@@ -4,9 +4,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd.functional as AF
 from functorch import jacfwd, vmap
+from model import types
+from model import rigid_body as rigid
+from typing import Any, Iterable, Optional, Dict, Tuple
 
 class NeuralNetwork(nn.Module):
-    ''' Network class containing occupancy and appearance field
+    ''' Network class containing occupancy and appearance (and warp) field
     
     Args:
         cfg (dict): network configs
@@ -20,7 +23,6 @@ class NeuralNetwork(nn.Module):
         hidden_size = cfg['hidden_dim']
         self.octaves_pe = cfg['octaves_pe']
         self.octaves_pe_views = cfg['octaves_pe_views']
-        self.octaves_pe_warp = cfg['octaves_pe_warp']
         dim_warp = 1
         self.skips = cfg['skips']
         self.rescale = cfg['rescale']
@@ -38,20 +40,15 @@ class NeuralNetwork(nn.Module):
         dim_embed_view = dim + dim*self.octaves_pe_views*2 + dim + dim + self.feat_size 
         self.transform_points = PositionalEncoding(L=self.octaves_pe)
         self.transform_points_view = PositionalEncoding(L=self.octaves_pe_views)
-        self.transform_points_warp = PositionalEncoding(L=self.octaves_pe_warp)
         
         ## warp network
-        if self.warp:
-            dims_warp = [dim_warp] + [ hidden_size for i in range(0, 4)] + [dim]
-            self.num_layers_warp = len(dims_warp)
+        if self.warp is not None:
+            if self.warp == 'translation':
+                self.warp_field = TranslationField(dim, dim_warp, hidden_size, cfg['octaves_pe_warp'])
+            elif self.warp == 'SE3Field':
+                self.warp_field = SE3Field(dim, dim_warp, hidden_size, cfg['octaves_pe_warp'])
 
-            for l in range(0, self.num_layers_warp - 1):
-                out_dim = dims_warp[l + 1]
-                linw = nn.Linear(dims_warp[l], out_dim)
-                linw = nn.utils.weight_norm(linw)
-                setattr(self, "linw" + str(l), linw)
-            torch.nn.init.uniform_(linw.bias, -1e-4, 1e-4)
-            torch.nn.init.uniform_(linw.weight, -1e-4, 1e-4)
+            # raise(NotImplementedError)
         
         ### geo network
         dims_geo = [dim_embed] + [ hidden_size if i in self.skips else hidden_size for i in range(0, self.num_layers)] + [self.feat_size+1] 
@@ -130,6 +127,8 @@ class NeuralNetwork(nn.Module):
         return x
     
     def infer_warp(self, p, img_idx):
+        return self.warp_field(p, img_idx)
+        raise(NotImplementedError)
         pe = self.transform_points_warp(img_idx)
         x = torch.cat([p, pe], dim=-1)
         for l in range(0, self.num_layers_warp - 1):
@@ -211,3 +210,206 @@ class PositionalEncoding(object):
              torch.cos((2 ** i) * pi * p)],
              dim=-1) for i in range(self.L)], dim=-1)
         return torch.cat([p, p_transformed], dim=-1)
+
+class TranslationField(nn.Module):
+    ''' Network class containing warp field
+    
+    Args:
+        cfg (dict): network configs
+    '''
+
+    def __init__(self, dim, dim_warp, hidden_size, octaves_pe_warp, **kwargs):
+        super().__init__()
+        dims_warp = [dim_warp] + [ hidden_size for i in range(0, 4)] + [dim]
+        self.num_layers_warp = len(dims_warp)
+
+        for l in range(0, self.num_layers_warp - 1):
+            out_dim = dims_warp[l + 1]
+            linw = nn.Linear(dims_warp[l], out_dim)
+            linw = nn.utils.weight_norm(linw)
+            setattr(self, "linw" + str(l), linw)
+        torch.nn.init.uniform_(linw.bias, -1e-4, 1e-4)
+        torch.nn.init.uniform_(linw.weight, -1e-4, 1e-4)
+        self.transform_points_warp = PositionalEncoding(L=octaves_pe_warp)
+        self.relu = nn.ReLU()
+
+    def forward(self, p, img_idx):
+        pe = self.transform_points_warp(img_idx)
+        x = torch.cat([p, pe], dim=-1)
+        for l in range(0, self.num_layers_warp - 1):
+            linw = getattr(self, "linw" + str(l))
+            x = linw(x)
+            if l < self.num_layers_warp - 2:
+                x = self.relu(x)
+        return p + x
+
+
+class PositionalEncoding(object):
+    def __init__(self, L=10):
+        self.L = L
+    def __call__(self, p):
+        pi = 1.0
+        p_transformed = torch.cat([torch.cat(
+            [torch.sin((2 ** i) * pi * p), 
+             torch.cos((2 ** i) * pi * p)],
+             dim=-1) for i in range(self.L)], dim=-1)
+        return torch.cat([p, p_transformed], dim=-1)
+
+# class SE3Field(nn.Module):
+#     ''' Network class containing warp field
+    
+#     Args:
+#         cfg (dict): network configs
+#     '''
+#     # num_freqs: int
+#     # num_embeddings: int
+#     # num_embedding_features: int
+#     # min_freq_log2: int = 0
+#     # max_freq_log2: int = None
+#     # use_identity_map: bool = True
+#     octaves_pe_warp: int = 6
+
+#     activation: types.Activation = nn.ReLU()
+#     skips: Iterable[int] = (4,)
+#     trunk_depth: int = 6
+#     trunk_width: int = 128
+#     rotation_depth: int = 0
+#     rotation_width: int = 128
+#     pivot_depth: int = 0
+#     pivot_width: int = 128
+#     translation_depth: int = 0
+#     translation_width: int = 128
+#     # metadata_encoder_type: str = 'glo'
+#     # metadata_encoder_num_freqs: int = 1
+
+#     default_init: types.Initializer = torch.nn.init.xavier_uniform_()
+#     rotation_init: types.Initializer = torch.nn.init.uniform(scale=1e-4)
+#     pivot_init: types.Initializer = torch.nn.init.uniform(scale=1e-4)
+#     translation_init: types.Initializer = torch.nn.init.uniform(scale=1e-4)
+
+#     use_pivot: bool = False
+#     use_translation: bool = False
+
+#     def setup(self):
+        
+#         self.transform_points_warp = PositionalEncoding(L=self.octaves_pe_warp)
+                
+#         self.trunk = MLP(
+#             depth=self.trunk_depth,
+#             width=self.trunk_width,
+#             hidden_activation=self.activation,
+#             hidden_init=self.default_init,
+#             skips=self.skips)
+
+#         branches = {
+#             'w':
+#                 MLP(
+#                     depth=self.rotation_depth,
+#                     width=self.rotation_width,
+#                     hidden_activation=self.activation,
+#                     hidden_init=self.default_init,
+#                     output_init=self.rotation_init,
+#                     output_channels=3),
+#             'v':
+#                 MLP(
+#                     depth=self.pivot_depth,
+#                     width=self.pivot_width,
+#                     hidden_activation=self.activation,
+#                     hidden_init=self.default_init,
+#                     output_init=self.pivot_init,
+#                     output_channels=3),
+#         }
+#         if self.use_pivot:
+#             branches['p'] = MLP(
+#                 depth=self.pivot_depth,
+#                 width=self.pivot_width,
+#                 hidden_activation=self.activation,
+#                 hidden_init=self.default_init,
+#                 output_init=self.pivot_init,
+#                 output_channels=3)
+#         if self.use_translation:
+#             branches['t'] = MLP(
+#                 depth=self.translation_depth,
+#                 width=self.translation_width,
+#                 hidden_activation=self.activation,
+#                 hidden_init=self.default_init,
+#                 output_init=self.translation_init,
+#                 output_channels=3)
+#         self.branches = branches
+
+#     def warp(self,
+#            points: torch.tensor,
+#            metadata_embed: torch.tensor,
+#            extra: Dict[str, Any]):
+#         points_embed = self.points_encoder(points, alpha=extra.get('alpha'))
+#         inputs = torch.cat([points_embed, metadata_embed], dim=-1)
+#         trunk_output = self.trunk(inputs)
+
+#         w = self.branches['w'](trunk_output)
+#         v = self.branches['v'](trunk_output)
+#         theta = torch.linalg.norm(w, dim=-1)
+#         w = w / theta[..., jnp.newaxis]
+#         v = v / theta[..., jnp.newaxis]
+#         screw_axis = torch.cat([w, v], dim=-1)
+#         transform = rigid.exp_se3(screw_axis, theta)
+
+#         warped_points = points
+#         if self.use_pivot:
+#             pivot = self.branches['p'](trunk_output)
+#             warped_points = warped_points + pivot
+
+#         warped_points = rigid.from_homogenous(
+#             transform @ rigid.to_homogenous(warped_points))
+
+#         if self.use_pivot:
+#             warped_points = warped_points - pivot
+
+#         if self.use_translation:
+#             t = self.branches['t'](trunk_output)
+#             warped_points = warped_points + t
+
+#         return warped_points
+
+#     def forward(self, p, img_idx):
+#         pe = self.transform_points_warp(img_idx)
+#         x = torch.cat([p, pe], dim=-1)
+#         return self.warp(x)
+
+
+# class MLP(nn.Module):
+#   """Basic MLP class with hidden layers and an output layers."""
+#   depth: int
+#   width: int
+#   hidden_init: types.Initializer = nn.initializers.xavier_uniform()
+#   hidden_activation: types.Activation = nn.relu
+#   output_init: Optional[types.Initializer] = None
+#   output_channels: int = 0
+#   output_activation: Optional[types.Activation] = lambda x: x
+#   use_bias: bool = True
+#   skips: Tuple[int] = tuple()
+
+#   @nn.compact
+#   def __call__(self, x):
+#     inputs = x
+#     for i in range(self.depth):
+#       layer = nn.Dense(
+#           self.width,
+#           use_bias=self.use_bias,
+#           kernel_init=self.hidden_init,
+#           name=f'hidden_{i}')
+#       if i in self.skips:
+#         x = torch.cat([x, inputs], dim=-1)
+#       x = layer(x)
+#       x = self.hidden_activation(x)
+
+#     if self.output_channels > 0:
+#       logit_layer = nn.Dense(
+#           self.output_channels,
+#           use_bias=self.use_bias,
+#           kernel_init=self.output_init,
+#           name='logit')
+#       x = logit_layer(x)
+#       if self.output_activation is not None:
+#         x = self.output_activation(x)
+
+#     return 
