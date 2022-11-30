@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "train.py",
-            "args": ["configs/DIY/toby.yaml"],
+            "args": ["configs/DIY/curls.yaml"],
             "console": "integratedTerminal",
             "justMyCode": true,
             "python": "/scratch/soft/anaconda3/envs/unisurf/bin/python"

@@ -25,10 +25,15 @@ def skew(w: torch.tensor) -> torch.tensor:
   Returns:
     W: (3, 3) A skew matrix such that W @ v == w x v
   """
-  w = torch.reshape(w, (3))
-  return torch.tensor([[0.0, -w[2], w[1]], \
-                   [w[2], 0.0, -w[0]], \
-                   [-w[1], w[0], 0.0]])
+  w0,w1,w2 = torch.split(torch.reshape(w, (3,-1)), 1, dim=0)
+  O = torch.ones_like(w0)
+  W0 = torch.cat(( O, -w2,  w1))
+  W1 = torch.cat(( w2,  O, -w0))
+  W2 = torch.cat((-w1, w0,   O))
+  return torch.cat((W0,W1,W2), dim=-1)
+#   return torch.tensor([[0.0, -w2, w1], \
+#                        [w2, 0.0, -w0], \
+#                        [-w1, w0, 0.0]])
 
 
 def rp_to_se3(R: torch.tensor, p: torch.tensor) -> torch.tensor:
@@ -41,7 +46,9 @@ def rp_to_se3(R: torch.tensor, p: torch.tensor) -> torch.tensor:
       and translating by p.
   """
   p = torch.reshape(p, (3, 1))
-  return torch.cat([[R, p], [torch.tensor([[0.0, 0.0, 0.0, 1.0]])]])
+  A = torch.cat((R,p),dim=-1)
+  B = torch.tensor([[0.0, 0.0, 0.0, 1.0]]).to(A.device)
+  return torch.cat([A, B])
 
 
 def exp_so3(w: torch.tensor, theta: float) -> torch.tensor:
@@ -55,7 +62,8 @@ def exp_so3(w: torch.tensor, theta: float) -> torch.tensor:
       magnitude theta about axis w.
   """
   W = skew(w)
-  return torch.eye(3) + torch.sin(theta) * W + (1.0 - torch.cos(theta)) * W @ W
+  dev = W.device
+  return torch.eye(3).to(dev) + torch.sin(theta).to(dev) * W + (1.0 - torch.cos(theta)).to(dev) * W @ W
 
 
 def exp_se3(S: torch.tensor, theta: float) -> torch.tensor:
@@ -68,10 +76,11 @@ def exp_se3(S: torch.tensor, theta: float) -> torch.tensor:
     a_X_b: (4, 4) The homogeneous transformation matrix attained by integrating
       motion of magnitude theta about S for one second.
   """
-  w, v = torch.split(S, 2)
+  w, v = torch.split(S, 3, dim=-1)
   W = skew(w)
   R = exp_so3(w, theta)
-  p = (theta * torch.eye(3) + (1.0 - torch.cos(theta)) * W +
+  dev = W.device
+  p = (theta * torch.eye(3).to(dev) + (1.0 - torch.cos(theta)) * W +
        (theta - torch.sin(theta)) * W @ W) @ v
   return rp_to_se3(R, p)
 

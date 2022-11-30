@@ -220,11 +220,11 @@ class Renderer(nn.Module):
             N = surface_points.shape[0]
             surface_points_neig = surface_points + (torch.rand_like(surface_points) - 0.5) * 0.01      
             pp = torch.cat([surface_points, surface_points_neig], dim=0)
-            g = self.model.gradient(pp) 
+            g = self.model.gradient(pp, img_idx) 
             normals_ = g[:, 0, :] / (g[:, 0, :].norm(2, dim=1).unsqueeze(-1) + 10**(-5))
             diff_norm =  torch.norm(normals_[:N] - normals_[N:], dim=-1)
             if use_elastic_loss > 0 and len(pp) > 0:
-                jac = self.model.jacobian(pp, img_idx)
+                jac = self.model.jacobian(pp, img_idx) 
             else:
                 jac = None
             if use_bg_loss > 0 and bg_points is not None:
@@ -308,7 +308,7 @@ class Renderer(nn.Module):
             # Derive Normals
             grad = []
             for pnts in torch.split(surface_points, 1000000, dim=0):
-                grad.append(self.model.gradient(pnts)[:,0,:].detach())
+                grad.append(self.model.gradient(pnts, img_idx=img_idx)[:,0,:].detach())
                 torch.cuda.empty_cache()
             grad = torch.cat(grad,0)
             surface_normals = grad / grad.norm(2,1,keepdim=True)

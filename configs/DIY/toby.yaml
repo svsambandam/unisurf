@@ -5,7 +5,7 @@ dataloading:
   dataset_name: DIY
   ignore_image_idx: []
   img_size: null
-  n_views: 49
+  n_views: 101
   n_workers: 8
   path: data/DIY/
 model:
@@ -18,9 +18,13 @@ model:
   octaves_pe_warp: 6
   rescale: 1.0
   sig_factor: 10.0
+  use_translation: false
+  use_pivot: false
+  use_jac_condition: false
   skips:
   - 4
-  warp: 'translation'
+  warp: 'SE3Field'
+  hyperwarp: 0
 rendering:
   interval_decay: 1.5e-05
   interval_end: 0.1
@@ -30,7 +34,7 @@ rendering:
   num_points_out: 32
   occ_prob_points: 64
   radius: 4.0
-  ray_marching_steps: 256
+  ray_marching_steps: 8 #128 #256
   sig_factor: 10.0
   type: unisurf
   use_bg_loss: true
@@ -46,13 +50,13 @@ training:
   lambda_normals: 0.005
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
-  n_training_points: 1024
+  n_training_points: 512 #1024
   out_dir: ./out/DIY/toby/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [800, 600]
+  vis_resolution: [960, 536]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

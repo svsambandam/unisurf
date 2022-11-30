@@ -9,7 +9,9 @@ dataloading:
   n_workers: 8
   path: data/DIY/
 model:
-  warp: 'translationd'
+  warp: 'SE3Field' #'translation' #
+  hyperwarp: 1
+  ambient_dim: 2
   feat_size: 256
   geometric_init: true
   hidden_dim: 256
@@ -19,6 +21,9 @@ model:
   octaves_pe_warp: 6
   rescale: 1.0
   sig_factor: 10.0
+  use_translation: false
+  use_pivot: false
+  use_jac_condition: 0
   skips:
   - 4
 rendering:
@@ -34,16 +39,16 @@ rendering:
   sig_factor: 10.0
   type: unisurf
   white_background: false
-  use_elastic_loss: true
-  use_bg_loss: true
+  use_elastic_loss: false
+  use_bg_loss: false
 training:
   backup_every: 10000
   batch_size: 1
   checkpoint_every: 5000
   lambda_l1_rgb: 1.0
   lambda_normals: 0.005
-  lambda_elastic: 0.1
-  lambda_bg : 0.1
+  lambda_elastic: 0.0
+  lambda_bg : 0.0
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
