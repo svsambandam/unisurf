@@ -130,6 +130,8 @@ class Trainer(object):
 
             img_pred = torch.tensor(img_out/255).reshape(data['img'].shape).float()
             stats = get_stats(img_pred, data['img'])
+            with open(os.path.join(out_render_path, '%04d_unisurf_stats.txt' % img_idx), 'w') as f:
+                print(stats, file=f)
 
         with torch.no_grad():
             mask_pred = torch.ones(pixels.shape[0], pixels.shape[1]).bool()

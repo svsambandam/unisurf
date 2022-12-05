@@ -9,10 +9,10 @@ dataloading:
   n_workers: 8
   path: data/DIY/
 model:
-  warp: 'SE3Field' #'translation' #
+  warp: null #'SE3Field' #'translation' #
   condition_appearance: 0
-  hyperwarp: 1
-  ambient_dim: 2
+  hyperwarp: 0
+  ambient_dim: 0 #2
   feat_size: 256
   geometric_init: true
   hidden_dim: 256
@@ -53,7 +53,7 @@ training:
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
-  out_dir: ./out/DIY/curls/
+  out_dir: ./out/DIY/curls_ctrl/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
