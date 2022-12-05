@@ -10,6 +10,7 @@ from model.losses import Loss
 import numpy as np
 logger_py = logging.getLogger(__name__)
 from PIL import Image
+from model.losses import Stats
 
 
 class Trainer(object):
@@ -92,10 +93,12 @@ class Trainer(object):
 
         return eval_dict
     
-    def render_visdata(self, data, bg_points, resolution, it, out_render_path):
+    def render_visdata(self, data, bg_points, resolution, it, out_render_path, report_lpips=False):
         (img, mask, world_mat, camera_mat, scale_mat, img_idx) = \
             self.process_data_dict(data)
         h, w = resolution
+
+        get_stats = Stats(lpips=report_lpips)
         
         p_loc, pixels = arange_pixels(resolution=(h, w))
 
@@ -125,6 +128,9 @@ class Trainer(object):
                 os.path.join(out_render_path, '%04d_unisurf.png' % img_idx)
             )
 
+            img_pred = torch.tensor(img_out/255).reshape(data['img'].shape).float()
+            stats = get_stats(img_pred, data['img'])
+
         with torch.no_grad():
             mask_pred = torch.ones(pixels.shape[0], pixels.shape[1]).bool()
 
@@ -149,7 +155,7 @@ class Trainer(object):
                 os.path.join(out_render_path, '%04d_phong.png' % img_idx)
             )
             
-        return img_out.astype(np.uint8)
+        return img_out.astype(np.uint8), stats
 
     def process_data_dict(self, data):
         ''' Processes the data dictionary and returns respective tensors

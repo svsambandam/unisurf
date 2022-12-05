@@ -11,3 +11,4 @@ utils/libmcubes/numpy/
 utils/libmcubes/mcubes.cpython-310-x86_64-linux-gnu.so
 utils/libmise/mise.cpython-310-x86_64-linux-gnu.so
 code
+points/

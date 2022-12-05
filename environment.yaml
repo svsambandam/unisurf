@@ -3,13 +3,16 @@ channels:
   - pytorch
   - conda-forge
   - anaconda
+  - nvidia
   - defaults
 dependencies:
   - python
-  - pytorch 
+  - pytorch
+  - pytorch-cuda=11.6 
   - torchvision 
   - torchaudio 
   - cudatoolkit=10.2
+  - cudnn
   - cffi
   - cython
   - imageio
@@ -23,6 +26,7 @@ dependencies:
   - wheel
   - pip
   - tqdm
+  - torchmetrics
   - pip:
     - ipdb
     - ipython
@@ -32,3 +36,4 @@ dependencies:
     - scikit-image
     - pyyaml
     - trimesh
+    - functorch

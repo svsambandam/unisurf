@@ -121,11 +121,6 @@ logger_py.info('Total number of parameters: %d' % nparameters)
 t0b = time.time()
 ogt = time.time()
 
-# TODO: 
-# preprocess bg points, 
-# finalize bg loss
-# se3 field
-
 
 while True:
     epoch_it += 1
@@ -150,10 +145,12 @@ while True:
             out_render_path = os.path.join(render_path, '%04d_vis' % it)
             if not os.path.exists(out_render_path):
                 os.makedirs(out_render_path)
-            val_rgb = trainer.render_visdata(
+            val_rgb, stats = trainer.render_visdata(
                         data_test, bg_points, 
                         cfg['training']['vis_resolution'], 
-                        it, out_render_path)
+                        it, out_render_path, cfg['training']['report_lpips'])
+            for s, num in stats.items():
+                logger.add_scalar('stats/'+s, num.detach().cpu(), it)
             #logger.add_image('rgb', val_rgb, it)
         
         # Save checkpoint

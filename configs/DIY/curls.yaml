@@ -10,6 +10,7 @@ dataloading:
   path: data/DIY/
 model:
   warp: 'SE3Field' #'translation' #
+  condition_appearance: 0
   hyperwarp: 1
   ambient_dim: 2
   feat_size: 256
@@ -61,3 +62,4 @@ training:
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0
+  report_lpips: False

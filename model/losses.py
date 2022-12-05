@@ -2,7 +2,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from functorch import vmap 
-import functools
+from torchmetrics import StructuralSimilarityIndexMeasure
+import lpips
 
 
 class Loss(nn.Module):
@@ -147,19 +148,6 @@ class Loss(nn.Module):
 
         return scale * loss
 
-    # def nearest_rotation_svd(matrix, eps=1e-6):
-    #     """Computes the nearest rotation using SVD."""
-    #     # TODO(keunhong): Currently this produces NaNs for some reason.
-    #     u, _, vh = torch.linalg.svd(matrix + eps, compute_uv=True, full_matrices=False)
-    #     # Handle the case when there is a flip.
-    #     # M will be the identity matrix except when det(UV^T) = -1
-    #     # in which case the last diagonal of M will be -1.
-    #     det = torch.linalg.det(u @ vh)
-    #     m = torch.stack([torch.ones_like(det), torch.ones_like(det), det], axis=-1)
-    #     m = torch.diag(m)
-    #     r = u @ m @ vh
-    #     return 
-
     def forward(self, rgb_pred, rgb_gt, diff_norm, jacobian_mat, bg_points=None, bg_points_warped=None, elastic_loss_type='log_svals'):
         rgb_gt = rgb_gt.cuda()
         
@@ -190,12 +178,100 @@ class Loss(nn.Module):
         if torch.isnan(loss):
             breakpoint()
 
-        return {
+        loss = {
             'loss': loss,
             'fullrgb_loss': rgb_full_loss,
             'grad_loss': grad_loss,
             'elastic_loss': elastic_loss,
             'background_loss': bg_loss
         }
+        return loss
 
 
+class Stats(nn.Module):
+    def __init__(self, lpips=False):
+        self.lpips = lpips
+        super().__init__()
+
+    def error_mse(self, im_pred, im_gt, mask = None):
+        """
+        Computes MSE metric. Optionally applies mask.
+        """
+        # Linearize.
+        im_pred = im_pred[..., :3].reshape(-1, 3)
+        im_gt = im_gt[..., :3].reshape(-1, 3)
+
+        # Mask?
+        if mask is not None:
+            mask = mask.flatten()
+            # im_pred = im_pred[mask, :]
+            # im_gt = im_gt[mask, :]
+
+            # Use multiplication method as described in paper
+            im_pred = im_pred * mask[..., None]
+            im_gt = im_gt * mask[..., None]
+
+        mse = (im_pred - im_gt) ** 2
+        return mse.mean()
+
+    def error_psnr(self, im_pred, im_gt, mask = None):
+        """
+        Computes PSNR metric. Optionally applies mask.
+        Assumes floats [0,1].
+        """
+        mse = self.error_mse(im_pred, im_gt, mask)
+        # https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+        return 20 * torch.log10(torch.tensor(1.0)) - 10 * torch.log10(mse), mse
+
+
+    def error_ssim(self, im_pred, im_gt, pad=0, pad_mode='linear_ramp'):
+        """Compute the LPIPS metric."""
+        ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
+        return ssim(im_pred, im_gt)
+
+    def error_lpips(self, im_pred, im_gt, mask=None, metric=None):
+        """
+        Computes LPIPS metric. Optionally applies mask.
+        """
+        # Mask?
+        if mask is not None:
+            mask = mask.reshape(im_pred.shape[0], im_pred.shape[1], 1).repeat(3, axis=2)
+            im_pred = im_pred * mask
+            im_gt = im_gt * mask
+
+        # To torch.
+        device = 'cuda'
+        print(im_gt.shape, im_pred.shape)
+        im_pred = (im_pred).to(device)
+        im_gt = (im_gt).to(device)
+        print(im_gt.shape, im_pred.shape)
+        # Make metric.
+        if metric is None:
+            # best forward scores
+            metric_a = lpips.LPIPS(net='alex').to(device)
+            # # closer to "traditional" perceptual loss, when used for optimization
+            metric_v = lpips.LPIPS(net='vgg').to(device)
+
+        # Compute metric.
+        loss_a = metric_a(im_pred, im_gt)
+        loss_v = metric_v(im_pred, im_gt)
+
+        return loss_a.item(), loss_v.item()
+
+    def forward(self, im_pred, im_gt):
+        psnr, mse = self.error_psnr(im_pred, im_gt)
+        ssim = self.error_ssim(im_pred, im_gt)
+        if self.lpips:
+            lpips_alex, lpips_vgg = self.error_lpips(im_pred, im_gt)
+            stats = {
+                'psnr': psnr,
+                'lpips_alex': lpips_alex,
+                'lpips_vgg': lpips_vgg,
+                'ssim': ssim
+            }
+        else: 
+            stats = {
+                'psnr': psnr,
+                'ssim': ssim
+            }
+        return stats

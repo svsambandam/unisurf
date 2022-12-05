@@ -46,6 +46,7 @@ class NeuralNetwork(nn.Module):
         self.use_pivot = cfg['use_pivot']
         self.use_translation = cfg['use_translation']
         self.use_jac_condition = cfg['use_jac_condition']
+        self.cond_app = cfg['condition_appearance']
         bias = 0.6
 
         if not self.hyperwarp:
@@ -54,8 +55,8 @@ class NeuralNetwork(nn.Module):
         # init positional encoding
         dim_warp  = dim_code_warp*self.octaves_pe*2 + dim + dim_code_warp 
         dim_embed = (dim + self.ambient_dim)*self.octaves_pe*2 + (dim + self.ambient_dim) + self.use_jac_condition
-        dim_embed_view = ((dim + self.ambient_dim) + dim*self.octaves_pe_views*2 
-                            + dim + dim + self.feat_size + dim_code_warp*self.octaves_pe*2 + dim_code_warp)
+        dim_embed_view = ((dim + self.ambient_dim) + dim*self.octaves_pe_views*2 + dim + dim + self.feat_size
+                             + self.cond_app *(dim_code_warp*self.octaves_pe*2 + dim_code_warp))
         self.transform_points = PositionalEncoding(L=self.octaves_pe)
         self.transform_points_view = PositionalEncoding(L=self.octaves_pe_views)
         self.octaves_pe_warp = cfg['octaves_pe_warp']
@@ -144,8 +145,11 @@ class NeuralNetwork(nn.Module):
     
     def infer_app(self, points, normals, view_dirs, feature_vectors, img_idx=None):
         points, img_idx = self.map_points(points, img_idx=img_idx)
-        pe = self.transform_points_warp(img_idx)
-        rendering_input = torch.cat([points, view_dirs, normals.squeeze(-2), feature_vectors, pe], dim=-1)
+        if self.cond_app:
+            pe = self.transform_points_warp(img_idx)
+            rendering_input = torch.cat([points, view_dirs, normals.squeeze(-2), feature_vectors, pe], dim=-1)
+        else:
+            rendering_input = torch.cat([points, view_dirs, normals.squeeze(-2), feature_vectors], dim=-1)
         x = rendering_input
         for l in range(0, self.num_layers_app - 1):
             lina = getattr(self, "lina" + str(l))
@@ -365,7 +369,7 @@ class NeuralNetwork(nn.Module):
 
     def infer_hyperwarp(self, p, img_idx):
         pe = self.transform_points_hyperwarp(img_idx)
-        x = torch.cat([p, pe.reshape(-1,pe.shape[-1])], dim=-1)
+        x = torch.cat([p, pe.reshape(p.shape[:-1]+pe.shape[-1:])], dim=-1)
         inputs = x
         for l in range(0, self.num_layers_hyperwarp - 1):
             linw = getattr(self, "linh" + str(l))

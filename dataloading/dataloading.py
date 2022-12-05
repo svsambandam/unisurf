@@ -161,6 +161,7 @@ class Shapes3dDataset(data.Dataset):
         self.n_views = n_views
         self.cached_fields = shared_dict
         self.split_model_for_images = split_model_for_images
+        self.dataset = {}
 
         if split_model_for_images:
             assert(n_views > 0)
@@ -217,6 +218,10 @@ class Shapes3dDataset(data.Dataset):
                     {'category': c, 'model': m, 'category_id': c_idx}
                     for m in models_c
                 ]
+        
+        for i in range(self.n_views):
+            self.dataset[i] = self.__getitem__(i)
+        return
 
     def __len__(self):
         ''' Returns the length of the dataset.
@@ -235,56 +240,60 @@ class Shapes3dDataset(data.Dataset):
 
         model_path = os.path.join(self.dataset_folder, category, model)
         data = {}
-        for field_name, field in self.fields.items():
-            try:
-                if self.cache_fields:
-                    if self.split_model_for_images:
-                        idx_img = self.models[idx]['image_id']
-                    else:
-                        idx_img = np.random.randint(0, self.n_views)
-                    k = '%s_%s_%d' % (model_path, field_name, idx_img)
+        if idx in self.dataset.keys():
+            return self.dataset[idx]
+        else:
+            for field_name, field in self.fields.items():
+                try:
+                    if self.cache_fields:
+                        if self.split_model_for_images:
+                            idx_img = self.models[idx]['image_id']
+                        else:
+                            idx_img = np.random.randint(0, self.n_views)
+                        k = '%s_%s_%d' % (model_path, field_name, idx_img)
 
-                    if k in self.cached_fields:
-                        field_data = self.cached_fields[k]
-                        #print(k)
-                    else:
+                        if k in self.cached_fields:
+                            field_data = self.cached_fields[k]
+                            #print(k)
+                        else:
+                            
+                            field_data = field.load(model_path, idx, c_idx,
+                                                    input_idx_img=idx_img)
+                            self.cached_fields[k] = field_data
+                            #print('Not cached %s' %k)
                         
-                        field_data = field.load(model_path, idx, c_idx,
-                                                input_idx_img=idx_img)
-                        self.cached_fields[k] = field_data
-                        #print('Not cached %s' %k)
-                    
-                else:
-                    if self.split_model_for_images:
-                        idx_img = self.models[idx]['image_id']
-                        field_data = field.load(
-                            model_path, idx, c_idx, idx_img)
                     else:
-                        field_data = field.load(model_path, idx, c_idx)
-                        
-            except Exception:
-                if self.no_except:
-                    logger.warn(
-                        'Error occurred when loading field %s of model %s (%s)'
-                        % (field_name, model, category)
-                    )
-                    return None
-                else:
-                    raise
-
-
-            if isinstance(field_data, dict):
-                for k, v in field_data.items():
-                    if k is None:
-                        data[field_name] = v
+                        if self.split_model_for_images:
+                            idx_img = self.models[idx]['image_id']
+                            field_data = field.load(
+                                model_path, idx, c_idx, idx_img)
+                        else:
+                            field_data = field.load(model_path, idx, c_idx)
+                            
+                except Exception:
+                    if self.no_except:
+                        logger.warn(
+                            'Error occurred when loading field %s of model %s (%s)'
+                            % (field_name, model, category)
+                        )
+                        return None
                     else:
-                        data['%s.%s' % (field_name, k)] = v
-            else:
-                data[field_name] = field_data
+                        raise
 
-        if self.transform is not None:
-            data = self.transform(data)
-        return data
+
+                if isinstance(field_data, dict):
+                    for k, v in field_data.items():
+                        if k is None:
+                            data[field_name] = v
+                        else:
+                            data['%s.%s' % (field_name, k)] = v
+                else:
+                    data[field_name] = field_data
+
+            if self.transform is not None:
+                data = self.transform(data)
+            self.dataset[idx] = data
+            return data
 
     def get_model_dict(self, idx):
         return self.models[idx]
