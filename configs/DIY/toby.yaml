@@ -20,13 +20,13 @@ model:
   sig_factor: 10.0
   use_translation: false
   use_pivot: false
-  use_jac_condition: false
   skips:
   - 4
-  warp: 'translation' #'SE3Field'
+  warp: 'SE3Field' #'translation' #
   hyperwarp: 0
   ambient_dim: 2
   condition_appearance: 0
+  use_jac_condition: 0
 rendering:
   interval_decay: 1.5e-05
   interval_end: 0.1
@@ -39,21 +39,21 @@ rendering:
   ray_marching_steps: 256
   sig_factor: 10.0
   type: unisurf
-  use_bg_loss: false
+  use_bg_loss: true
   use_elastic_loss: false
   white_background: false
 training:
   backup_every: 10000
   batch_size: 1
   checkpoint_every: 5000
-  lambda_bg: 0.1
-  lambda_elastic: 0.1
+  lambda_bg: 0.001
+  lambda_elastic: 0.0
   lambda_l1_rgb: 1.0
   lambda_normals: 0.005
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
-  out_dir: ./out/DIY/toby_ebt/
+  out_dir: ./out/DIY/toby_bse3/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]

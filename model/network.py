@@ -62,7 +62,7 @@ class NeuralNetwork(nn.Module):
         self.octaves_pe_warp = cfg['octaves_pe_warp']
         
         ## warp network
-        if self.warp is not None:
+        if self.warp is not None and self.warp != 'None':
             if self.warp == 'translation':
                 dims_warp = [dim_warp] + [ hidden_size for i in range(0, 4)] + [dim]
                 self.warp_field = self.TranslationField(dims_warp)
@@ -164,6 +164,8 @@ class NeuralNetwork(nn.Module):
             return self.translation_warp(p, img_idx)
         elif self.warp == 'SE3Field':
             return self.se3_warp(p, img_idx)
+        elif self.warp == 'None' or not self.warp:
+            return p
         else:
             raise ValueError(f'Unknown warp field type: {self.warp!r}')
 
@@ -187,6 +189,8 @@ class NeuralNetwork(nn.Module):
             img_idx = img_idx.to(torch.float32)
             if len(img_idx) == 1:
                 img_idx = torch.ones_like(torch.unsqueeze(p[...,0],dim=-1))*img_idx
+            if not img_idx.shape == p.shape:
+                img_idx = img_idx.reshape(list(p.shape[:-1])+[1])
             img_idx.requires_grad_(True)     
             return vmap(jacfwd(self.infer_warp))(p,img_idx) 
 

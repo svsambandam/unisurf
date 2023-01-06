@@ -9,10 +9,11 @@ dataloading:
   n_workers: 8
   path: data/DIY/
 model:
-  warp: null #'SE3Field' #'translation' #
+  warp: 'translation' #'SE3Field' #
   condition_appearance: 0
+  use_jac_condition: 0
   hyperwarp: 0
-  ambient_dim: 0 #2
+  ambient_dim: 2
   feat_size: 256
   geometric_init: true
   hidden_dim: 256
@@ -24,7 +25,6 @@ model:
   sig_factor: 10.0
   use_translation: false
   use_pivot: false
-  use_jac_condition: 0
   skips:
   - 4
 rendering:
@@ -53,7 +53,7 @@ training:
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
-  out_dir: ./out/DIY/curls_ctrl/
+  out_dir: ./out/DIY/curls_t/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
