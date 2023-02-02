@@ -1,11 +1,11 @@
 dataloading:
   batchsize: 1
   cache_fields: true
-  classes: [toby]
+  classes: [hearts]
   dataset_name: DIY
   ignore_image_idx: []
   img_size: null
-  n_views: 101
+  n_views: 150
   n_workers: 8
   path: data/DIY/
 model:
@@ -22,9 +22,10 @@ model:
   use_pivot: false
   skips:
   - 4
-  warp: 'SE3Field' #'translation' #
+  warp: None #'SE3Field' #'translation' #
   hyperwarp: 0
   ambient_dim: 2
+  2d: True
   condition_appearance: 0
   use_jac_condition: 0
 rendering:
@@ -32,33 +33,35 @@ rendering:
   interval_end: 0.1
   interval_start: 2.0
   n_max_network_queries: 64000
-  num_points_in: 64
-  num_points_out: 32
+  num_points_in: 1
+  num_points_out: 1
   occ_prob_points: 64
   radius: 4.0
-  ray_marching_steps: 256
+  ray_marching_steps: 1
+  secant_steps: 0
   sig_factor: 10.0
   type: unisurf
-  use_bg_loss: true
+  use_bg_loss: false
   use_elastic_loss: false
   white_background: false
+  2d: True
 training:
   backup_every: 10000
   batch_size: 1
   checkpoint_every: 5000
-  lambda_bg: 0.01
+  lambda_bg: 0.0
   lambda_elastic: 0.0
   lambda_l1_rgb: 1.0
-  lambda_normals: 0.005
+  lambda_normals: 0.0
   lambda_occ_prob: 0.0
-  learning_rate: 0.0001
-  n_training_points: 1024
-  out_dir: ./out/DIY/toby_bse3/
+  learning_rate: 0.000001
+  n_training_points: 4095
+  out_dir: ./out/DIY/hearts_ctrl3/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
   type: unisurf
-  vis_resolution: [960, 536]
+  vis_resolution: [64, 64]
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0

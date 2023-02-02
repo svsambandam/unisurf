@@ -54,7 +54,7 @@ training:
   lambda_occ_prob: 0.0
   learning_rate: 0.0001
   n_training_points: 1024
-  out_dir: ./out/DIY/scan55_ctrl/
+  out_dir: ./out/DIY/scan55_newctrl/
   print_every: 100
   scheduler_gamma: 0.5
   scheduler_milestones: [4000, 8000]
@@ -63,3 +63,4 @@ training:
   visualize_every: 1000
   visualize_skip: 20
   weight_decay: 0.0
+  report_lpips: False
